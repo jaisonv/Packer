@@ -1,0 +1,18 @@
+# Ignore system files
+.DS_Store
+
+# Ignore user data
+Packer.xcodeproj/project.xcworkspace/xcuserdata/
+Packer.xcodeproj/xcuserdata/
+Packer.xcworkspace/xcuserdata/
+
+# Ignore Carthage build
+/Carthage/*
+!/Carthage/Build/
+/Carthage/Build/*
+!/Carthage/Build/iOS
+/Carthage/Build/iOS/*.dSYM
+/Carthage/Build/iOS/*.bcsymbolmap
+
+# Ignore build
+/Build
