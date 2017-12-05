@@ -1,14 +1,22 @@
+//
+//  HTTPParameter.swift
+//  Packer
+//
+//  Created by Jaison Vieira on 09/11/17.
+//  Copyright © 2017 Stone Pagamentos. All rights reserved.
+//
+
 import Foundation
 
 // Utility type so that we can decode any type of HTTP parameter
 // Useful when we have mixed types in a HTTP request
-public enum HTTPParameter: CustomStringConvertible, Decodable {
+enum HTTPParameter: CustomStringConvertible, Decodable {
 	case string(String)
 	case bool(Bool)
 	case int(Int)
 	case double(Double)
 
-	public init(from decoder: Decoder) throws {
+	init(from decoder: Decoder) throws {
 		let container = try decoder.singleValueContainer()
 
 		if let string = try? container.decode(String.self) {
@@ -24,7 +32,7 @@ public enum HTTPParameter: CustomStringConvertible, Decodable {
 		}
 	}
 
-	public var description: String {
+	var description: String {
 		switch self {
 		case .string(let string):
 			return string
