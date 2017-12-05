@@ -1,6 +1,6 @@
 //
 //  Network.swift
-//  PomboMail
+//  Packer
 //
 //  Created by Jaison Vieira on 08/11/17.
 //  Copyright © 2017 Stone Pagamentos. All rights reserved.

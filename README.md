@@ -3,97 +3,102 @@ Packer is a networking library that makes your requests "plug and play". Easy!
 
 ## Installing
 
-#### Manualy
-If you want to install int manually you need to download the
-Para instalar manualmente a SDK é necessário baixar o arquivo [Jaiminho_Manual.zip](https://github.com/stone-payments/jaiminho-ios/releases) e colocar os arquivos `Jaiminho.framework` e `Packer.framework` em Embedded Binaries como na imagem abaixo:
+#### Carthage
+github "stone-payments/packer"
 
-![embedded](https://user-images.githubusercontent.com/2567823/33395917-21ed1ab2-d52e-11e7-8b6c-602116f0e954.png)
+## Usage
 
-Em `Build Phases` clique para adicionar um `Run Script`...
+#### Requests
+Every request that one specific API has will need to be represented by a class/struct that implements the `APIRequest` protocol. It will require to specific a `typealias` for Response indicating what is expected to be the response for this request. You will also need to implement a property `resourceName` containing the endpoint for this request in the API. It's good to use a read-only computed property for this so that the `Codable` will not consider this property in the serialization.
 
-![script](https://user-images.githubusercontent.com/2567823/33395965-4870dd72-d52e-11e7-958e-eb7af04a7be1.png)
+The Response's type must implement the `Decodable` protocol. And any property in the request tree must implement the `Encodable` protocol.
 
-E cole o script abaixo:
-
-```bash
-FRAMEWORKS=("Jaiminho" "Packer")
-for FRAMEWORK in $FRAMEWORKS
-do
-FRAMEWORK_EXECUTABLE_PATH="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/$FRAMEWORK.framework/$FRAMEWORK"
-EXTRACTED_ARCHS=()
-for ARCH in $ARCHS
-do
-lipo -extract "$ARCH" "$FRAMEWORK_EXECUTABLE_PATH" -o "$FRAMEWORK_EXECUTABLE_PATH-$ARCH"
-EXTRACTED_ARCHS+=("$FRAMEWORK_EXECUTABLE_PATH-$ARCH")
-done
-lipo -o "$FRAMEWORK_EXECUTABLE_PATH-merged" -create "${EXTRACTED_ARCHS[@]}"
-rm "${EXTRACTED_ARCHS[@]}"
-rm "$FRAMEWORK_EXECUTABLE_PATH"
-mv "$FRAMEWORK_EXECUTABLE_PATH-merged" "$FRAMEWORK_EXECUTABLE_PATH"
-done
-```
-## Usando
-
-#### Configuração de hambiente
-
-Se precisar rodar o PomboCorreio em ambiente de teste pode ser usada a propriedade `environment` da classe `Configure` que recebe um enum `Environment`, podendo ser `.develop` ou `.production`.
-
-> Por padrão o ambiente de produção já estará selecionado.
-
+###### Request example:
 ```swift
-// para ambiente de desenvolvimento
-Configuration.environment = .develop
+struct FooRequest: APIRequest {
+    // this is the type of the response for this request
+    typealias Response = FooResponse
 
-// para ambiente de produção
-Configuration.environment = .production
-```
-
-
-#### Envio de email
-
-Para enviar uma mensagem de email é necessario criar uma instancia de `Email` e usá-lo para criar uma instancia do `PomboEmailRequest`.
-
-```swift
-// Cria uma instancia do Email
-let to = Contact(address: "test@mail.com.br")
-let from = Contact(address: "juaum@stone.com.br", name: "Juaum")
-let email = Email(from: from, to: [to], body: "Hello there!", subject: "Sent with Jaiminho")
-
-// Cria uma instancia do PomboEmailRequest
-let emailRequest = PomboEmailRequest(email: email, company: "ACME", costCenter: "A cost center", structure: .commercial)
-
-// Instancia a classe cliente da API Pombo passando o token da API
-let pombo = PomboCorreio(apiToken: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-
-// Enviar o request passando a instancia do PomboEmailRequest e o tipo do request como POST
-pombo.send(emailRequest, method: .post) { response in
-    switch response {
-        case .success(let success):
-            print(success.trackId) // id to track the job
-        case .failure(let error):
-            print(error)
+    // the string containing the endpoing should be a computed property
+    var resourceName: String {
+        return "fooEndpoint"
     }
+
+    var foo: String
+    var bar: Int
+}
+```
+###### Response example:
+```swift
+struct FooResponse: Decodable {
+    var status: Bool
+    var message: String
 }
 ```
 
-#### Acompanhando o job
-
-Quando um request PomboEmailRequest é enviado com sucesso ele retorna uma instancia de `PomboEmailResponse` que contém uma propriedade chamada `trackId`. Essa propriedade pode ser usada para fazer o acompanhamento do job.
+###### What if I have a GET request that does not use query string?
 
 ```swift
-// Instanciar PomboJobRequest com o trackId
-let job = PomboJobRequest(trackId: "1234567890")
+struct FooRequest: APIRequest {
+    typealias Response = FooResponse
 
-// Instanciar a classe cliente da api Pombo passando o token da API.
-let pombo = PomboCorreio(apiToken: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    // build the URL using the ID property
+    var resourceName: String {
+        return "foo/\(fooId)"
+    }
 
-// Enviar o request passando a instancia de PomboJobRequest e o tipo do request como GET
-pombo.send(job, method: .get) { response in
-    switch response {
-        case .success(let success):
-            print(success.content.status)
-        case .failure(let error):
-            print(error)
+    // then make the property for the ID private so it will be ignored in the serialization
+    private var fooId: String
+}
+```
+
+#### APIs
+For each API you consume in your app you will need to implement the protocol `APIClient`.
+Initialize the `baseUrl` property with a string having the base URL for the API. The property `session` must be a `URLSession` and the `dataTask` a `URLSessionDataTask`. And finally, implement the function `send`.
+
+```swift
+class FooAPI: APIClient {
+    // we initialize with a default configuration
+    var session = URLSession(configuration: .default)
+    // here we only declare it
+    var dataTask: URLSessionDataTask?
+    // the base URL for the API
+    var baseUrl = "https://www.foobar.com/v1/"
+    var headers: [String : String] = ["Authorization":"API-TOKEN"]
+
+    // this is how we implement the 'send' function for this example API
+    func send<T>(_ request: T, method: HTTPMethod, completion: @escaping (Result<T.Response>) -> Void) where T : APIRequest {
+        do {
+            let urlRequest = try method.urlRequest(urlString: baseUrl, request: request, headers: headers)
+            dataTask = session.dataTask(with: urlRequest) { data, response, error in
+                if let data = data {
+                    do {
+                        if let response = response as? HTTPURLResponse,
+                            (200...204).contains(response.statusCode) { // specify this according to the API
+
+                            let objectResponse = try JSONDecoder().decode(T.Response.self, from: data)
+                            completion(.success(objectResponse))
+                        }
+                        else { // we are considering everything that's not 200 as an error
+                            completion(.failure(APIError.server(errors: ["Error"], message: "API error.")))
+                        }
+                    } catch {
+                        completion(.failure(error))
+                    }
+                }
+                else if let error = error {
+                    completion(.failure(error))
+                }
+                else {
+                    completion(.failure(APIError.server(errors: ["Error"], message: nil)))
+                }
+            }
+            dataTask?.resume()
+        }
+        catch {
+            completion(.failure(error))
+        }
     }
 }
 ```
+> Note that the HTTPMethod is an Enum and has a function called `urlRequest` that can be used to build the `URLRequest` that will be used in the `DataTask`.
