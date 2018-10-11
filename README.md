@@ -6,6 +6,9 @@ Packer is a networking library that makes your requests "plug and play". Easy!
 #### Carthage
 github "stone-payments/packer"
 
+#### Cocoapods
+pod 'Packer'
+
 ## Usage
 
 #### Requests
